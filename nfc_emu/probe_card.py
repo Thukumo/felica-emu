@@ -68,10 +68,21 @@ def on_connect(tag):
     info_table = Table(show_header=False, box=box.ROUNDED)
     info_table.add_row("IDm", f"[bold green]{tag.identifier.hex().upper()}[/bold green]")
     info_table.add_row("PMm", f"[green]{tag.pmm.hex().upper()}[/green]")
-    console.print(Panel(info_table, title="[bold blue]Card Detected[/bold blue]", expand=False))
-
+    
     clf = tag.clf
     idm = tag.identifier
+
+    # --- Request Response (Mode Check) ---
+    req_res = bytes([10, 0x04]) + idm
+    res = exchange(clf, req_res)
+    mode_str = "Unknown"
+    if res and len(res) >= 11:
+        mode = res[10]
+        mode_map = {0: "Normal", 1: "Authentication"}
+        mode_str = mode_map.get(mode, f"Custom (0x{mode:02X})")
+    info_table.add_row("Mode", f"[bold yellow]{mode_str}[/bold yellow]")
+
+    console.print(Panel(info_table, title="[bold blue]Card Detected[/bold blue]", expand=False))
 
     # ─── 1. Request System Code ─────────────────────────────────────
     console.print("\n[bold yellow][1] Request System Code[/bold yellow]")
