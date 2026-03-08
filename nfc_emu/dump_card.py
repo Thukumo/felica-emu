@@ -42,7 +42,7 @@ def scan_and_read(tag, idm):
                 area_ends[str(sc)] = end_code
             
             blocks = {}
-            if attr == "plain":
+            if attr.startswith("plain"):
                 for b in range(64):
                     data = FeliCaScanner.read_block(tag, idm, sc, b)
                     if data is None:

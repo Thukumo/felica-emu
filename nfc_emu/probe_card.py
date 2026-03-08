@@ -63,7 +63,7 @@ def on_connect(tag):
     for sc_data in found_sc_info:
         svc = sc_data["sc"]
         attr = sc_data["type"]
-        if attr != "plain": continue
+        if not attr.startswith("plain"): continue
 
         blocks = {}
         for blk in range(32):
