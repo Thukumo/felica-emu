@@ -150,3 +150,36 @@ def test_hook_interception(sample_card):
     result, res = proto.handle(b"\x98\x01")
     assert result == ProtocolResult.RESPONSE
     assert res == b"\x05\x9A\x00\x01\x02"
+
+def test_read_multiple_services_s_idx(protocol, sample_card):
+    # Service 1 (s_idx=1) を追加
+    sample_card.add_service(0x200B, "plain")
+    sample_card.set_block(0x200B, 0, b"SVC_1_BLOCK_0___")
+    protocol.current_idm = sample_card.idm
+    
+    # Read Service 1 (s_idx=1), Block 0 (2-byte format)
+    # [Code][IDm(8)][NumS(2)][S1][S2][NumB(1)][BList(2)]
+    # BList: \x88\x00 (s_idx=1, b_num=0)
+    cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
+           bytes([2, 0x0B, 0x10, 0x0B, 0x20, 1, 0x88, 0x00]))
+    
+    result, res = protocol.handle(cmd)
+    assert result == ProtocolResult.RESPONSE
+    assert res[10] == 0x00 # Status1: Success
+    assert res[13:29] == b"SVC_1_BLOCK_0___"
+
+def test_read_multiple_services_s_idx_3byte(protocol, sample_card):
+    # Service 1 (s_idx=1) を追加
+    sample_card.add_service(0x200B, "plain")
+    sample_card.set_block(0x200B, 0, b"SVC_1_BLOCK_0___")
+    protocol.current_idm = sample_card.idm
+    
+    # Read Service 1 (s_idx=1), Block 0 (3-byte format)
+    # BList: \x08\x00\x00 (s_idx=1, b_num=0)
+    cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
+           bytes([2, 0x0B, 0x10, 0x0B, 0x20, 1, 0x08, 0x00, 0x00]))
+    
+    result, res = protocol.handle(cmd)
+    assert result == ProtocolResult.RESPONSE
+    assert res[10] == 0x00 # Status1: Success
+    assert res[13:29] == b"SVC_1_BLOCK_0___"

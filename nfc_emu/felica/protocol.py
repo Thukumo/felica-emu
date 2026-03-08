@@ -224,12 +224,12 @@ class FeliCaProtocol(BaseProtocol):
             b_info = cmd[offset]
             if b_info & 0x80: # 2-byte format
                 if len(cmd) < offset + 2: return None
-                s_idx = (b_info & 0x7C) >> 2
-                b_num = ((b_info & 0x03) << 8) | cmd[offset + 1]
+                s_idx = (b_info & 0x78) >> 3
+                b_num = ((b_info & 0x06) << 7) | cmd[offset + 1]
                 offset += 2
             else: # 3-byte format
                 if len(cmd) < offset + 3: return None
-                s_idx = (b_info & 0x7C) >> 2
+                s_idx = (b_info & 0x78) >> 3
                 b_num = struct.unpack("<H", cmd[offset + 1:offset + 3])[0]
                 offset += 3
             block_list.append((s_idx, b_num))
