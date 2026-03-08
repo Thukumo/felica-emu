@@ -30,7 +30,7 @@
       devShells.${system}.default =
         let
           pythonEnv = pkgs.python3.withPackages (ps: [ 
-            ps.nfcpy ps.tqdm ps.pyusb ps.pick ps.rich ps.pytest 
+            ps.nfcpy ps.pick ps.rich ps.pytest 
           ]);
           
           # シンプルなラッパー作成
