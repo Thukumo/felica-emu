@@ -41,12 +41,13 @@ class FeliCaService:
         return self.memory.get(block_num)
 
 class FeliCaCard(BaseCard):
-    def __init__(self, idm: bytes, pmm: bytes, primary_sys_code: bytes, sys_codes: Optional[List[bytes]] = None):
+    def __init__(self, idm: bytes, pmm: bytes, primary_sys_code: bytes, sys_codes: Optional[List[bytes]] = None, mode: int = 0):
         if len(idm) != 8: raise ValueError("IDm must be 8 bytes")
         if len(pmm) != 8: raise ValueError("PMm must be 8 bytes")
         if len(primary_sys_code) != 2: raise ValueError("SysCode must be 2 bytes")
 
         self.primary_sys_code = primary_sys_code
+        self.mode = mode
         self.sys_map: Dict[int, Dict[str, bytes]] = {
             struct.unpack(">H", primary_sys_code)[0]: {"idm": idm, "pmm": pmm}
         }
@@ -132,6 +133,7 @@ class FeliCaCard(BaseCard):
             "idm": self.idm.hex().upper(),
             "pmm": self.pmm.hex().upper(),
             "sys_code": self.primary_sys_code.hex().upper(),
+            "mode": self.mode,
             "sys_codes": [sc.hex().upper() for sc in self.sys_codes],
             "sys_details": {
                 f"{sc:04X}": {
@@ -164,11 +166,12 @@ class FeliCaCard(BaseCard):
         primary_idm = bytes.fromhex(data.get("idm", "0000000000000000"))
         primary_pmm = bytes.fromhex(data.get("pmm", "0000000000000000"))
         primary_sys_code = bytes.fromhex(data.get("sys_code", "FFFF"))
+        mode = data.get("mode", 0)
         
         sys_codes_hex = data.get("sys_codes", [data.get("sys_code", "FFFF")])
         sys_codes = [bytes.fromhex(sc) for sc in sys_codes_hex]
 
-        card = cls(primary_idm, primary_pmm, primary_sys_code, sys_codes)
+        card = cls(primary_idm, primary_pmm, primary_sys_code, sys_codes, mode)
 
         # SCごとの個別設定があれば上書き
         if "sys_details" in data:
