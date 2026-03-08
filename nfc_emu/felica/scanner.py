@@ -103,7 +103,7 @@ class FeliCaRenderer:
             parent_node = stack[-1][1]
             attr = info.get("type", "unknown")
             
-            if attr == "area":
+            if attr.startswith("area"):
                 end_val = info.get("end_val", 0xFFFE)
                 label = Text()
                 label.append(f"Area 0x{sc:04X}", style="bold cyan")
