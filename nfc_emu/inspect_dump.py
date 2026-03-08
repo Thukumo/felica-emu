@@ -14,6 +14,10 @@ from .felica.card import FeliCaCard
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
+from rich.panel import Panel
+from rich.tree import Tree
+from rich.text import Text
+from rich import box
 
 console = Console()
 
@@ -73,6 +77,9 @@ def main():
         header_table.add_row("Primary PMm", f"[green]{card.pmm.hex().upper()}[/green]")
         header_table.add_row("Primary SC", f"[yellow]0x{card.primary_sys_code.hex().upper()}[/yellow]")
         
+        mode_map = {0: "Normal", 1: "Authentication"}
+        header_table.add_row("Mode", f"[bold white]{mode_map.get(card.mode, f'Custom (0x{card.mode:02X})')}[/bold white]")
+
         # マルチシステム情報の表示
         if len(card.sys_map) > 1:
             sys_info = []
@@ -80,28 +87,82 @@ def main():
                 sys_info.append(f"[bold yellow]0x{sc:04X}[/bold yellow] ([green]{info['idm'].hex().upper()}[/green])")
             header_table.add_row("All Systems", ", ".join(sys_info))
 
-        from rich.panel import Panel
         console.print(Panel(header_table, title="[bold blue]FeliCa Card Inspection[/bold blue]", expand=False))
 
-        # サービスの表示
+        # ─── サマリー Tree の表示 ───
+        root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+        # FeliCa では 0x0000 は Root
+        stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
+
+        # service_list が JSON にあればそれを使用し、なければ card.services から構築
+        svc_codes = card.service_list
+
+        for sc in svc_codes:
+            if sc == 0x0000: continue
+            
+            while len(stack) > 1 and sc > stack[-1][2]:
+                stack.pop()
+            parent_node = stack[-1][1]
+            
+            attr = card.get_service_attr(sc)
+            if attr == "area":
+                end_val = card.area_ends.get(sc, 0xFFFE)
+                label = Text()
+                label.append(f"Area 0x{sc:04X}", style="bold cyan")
+                label.append(f" (End: 0x{end_val:04X})", style="dim")
+                area_node = parent_node.add(label)
+                stack.append((sc, area_node, end_val))
+            else:
+                label = Text()
+                label.append(f"0x{sc:04X}", style="green")
+                label.append(f" ({attr})".ljust(14))
+                
+                # キーバージョンの取得
+                key_ver = 0
+                if sc in card.services:
+                    key_ver = card.services[sc].key_version
+                label.append(f"KeyVer: 0x{key_ver:04X}", style="yellow")
+                label.append("  ")
+                
+                num_blocks = 0
+                if sc in card.services:
+                    num_blocks = len(card.services[sc].memory)
+                
+                if num_blocks > 0:
+                    label.append(f"{num_blocks:>2} blocks", style="bold magenta")
+                else:
+                    label.append(" - blocks", style="dim")
+                parent_node.add(label)
+
+        console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
+        console.print(root_tree)
+
+        # ─── 各サービスのメモリデータ (Hexdump) ───
+        console.print("\n[bold yellow]Memory Contents:[/bold yellow]")
+        has_memory = False
         for svc_code in sorted(card.services):
             service = card.services[svc_code]
+            if not service.memory:
+                continue
+            
+            has_memory = True
             attr = service.attr
             
-            # エリア情報の追加
-            details = ""
-            if attr == "area" and svc_code in card.area_ends:
-                details = f" [dim]End: 0x{card.area_ends[svc_code]:04X}[/dim]"
-                
-            console.print(f"  [bold cyan][ 0x{svc_code:04X} : {attr:<9} ][/bold cyan]{details} [dim]{'-'*20}[/dim]")
-            
-            if service.memory:
-                for blk in sorted(service.memory):
-                    raw = service.memory[blk]
-                    hex_part = raw.hex().upper()
-                    ascii_part = "".join(chr(b) if 32 <= b <= 126 else "." for b in raw)
-                    console.print(f"    B{blk:>2}: [green]{hex_part}[/green] | [white]{ascii_part}[/white]")
-                console.print()
+            svc_blk_table = Table(show_header=True, box=box.SIMPLE_HEAD, header_style="bold magenta")
+            svc_blk_table.add_column("Blk", justify="right", style="dim")
+            svc_blk_table.add_column("Data (HEX)", style="green")
+            svc_blk_table.add_column("ASCII", style="white")
+
+            for blk in sorted(service.memory):
+                raw = service.memory[blk]
+                hex_part = raw.hex().upper()
+                ascii_part = "".join(chr(b) if 32 <= b <= 126 else "." for b in raw)
+                svc_blk_table.add_row(str(blk), hex_part, ascii_part)
+
+            console.print(Panel(svc_blk_table, title=f"[bold cyan]Service 0x{svc_code:04X} ({attr})[/bold cyan]", expand=False))
+
+        if not has_memory:
+            console.print("  [dim](No memory data available)[/dim]")
 
         patches = data.get("patches", []) + data.get("ascii_patches", [])
         if patches:
