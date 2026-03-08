@@ -41,6 +41,13 @@ def get_system_codes(tag):
             sys_codes.append(sc)
     return sys_codes if sys_codes else [0x0003]
 
+def get_mode(tag):
+    """Request Response (0x04) を発行して現在の動作モードを取得"""
+    res = exchange(tag, 0x04, tag.identifier, b"")
+    if res and len(res) >= 11:
+        return res[10]
+    return 0
+
 def _read_blocks(tag, idm, service_code, max_blocks=64):
     """Read Without Encryption (0x06) を発行してブロックを読み取る"""
     blocks = {}
@@ -151,6 +158,7 @@ def fix_ownership(path):
 def dump_card(tag, output_path):
     all_sys_codes = get_system_codes(tag)
     primary_sc = all_sys_codes[0]
+    mode = get_mode(tag)
     
     device_info = str(tag.clf.device) if hasattr(tag.clf, "device") else "Unknown Reader"
     
@@ -158,6 +166,8 @@ def dump_card(tag, output_path):
     info_table.add_row("Device", f"[cyan]{device_info}[/cyan]")
     info_table.add_row("Primary System", f"[bold yellow]0x{primary_sc:04X}[/bold yellow]")
     info_table.add_row("All Systems", f"[yellow]{', '.join([f'0x{sc:04X}' for sc in all_sys_codes])}[/yellow]")
+    mode_map = {0: "Normal", 1: "Authentication"}
+    info_table.add_row("Mode", f"[bold white]{mode_map.get(mode, f'Custom (0x{mode:02X})')}[/bold white]")
     
     console.print(Panel(info_table, title="[bold blue]FeliCa Multi-System Card Dumping[/bold blue]", expand=False))
 
@@ -212,6 +222,7 @@ def dump_card(tag, output_path):
         "idm": sys_details[f"{primary_sc:04X}"]["idm"],
         "pmm": sys_details[f"{primary_sc:04X}"]["pmm"],
         "sys_code": f"{primary_sc:04X}",
+        "mode": mode,
         "sys_codes": [f"{sc:04X}" for sc in all_sys_codes],
         "sys_details": sys_details,
         "service_list": sorted(list(combined_service_list)),
