@@ -35,8 +35,11 @@ def exchange(clf, req, timeout=2.0):
         res = clf.exchange(req, timeout=timeout)
         logger.debug(f"  <-- RES: {res.hex().upper()}")
         return res
-    except nfc.clf.CommunicationError as e:
+    except (nfc.clf.CommunicationError, nfc.clf.TimeoutError) as e:
         logger.warning(f"  [bold red][!] エラー: {type(e).__name__} {e}[/bold red]")
+        return None
+    except Exception as e:
+        logger.error(f"  [bold red][!] 予期せぬエラー: {e}[/bold red]")
         return None
 
 
@@ -87,7 +90,7 @@ def on_connect(tag):
     # ─── 1. Request System Code ─────────────────────────────────────
     console.print("\n[bold yellow][1] Request System Code[/bold yellow]")
     try:
-        req = bytes([2, 0x0C])
+        req = bytes([10, 0x0C]) + idm
         res = exchange(clf, req)
         if res and len(res) >= 11:
             num = res[10]
