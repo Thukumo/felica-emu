@@ -220,7 +220,7 @@ def on_connect(tag):
             if info["blocks"] > 0:
                 label.append(f"{info['blocks']:>2} blocks", style="bold magenta")
             else:
-                label.append("- blocks", style="dim")
+                label.append(" - blocks", style="dim")
             parent_node.add(label)
     
     console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
