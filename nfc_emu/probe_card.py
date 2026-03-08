@@ -209,7 +209,7 @@ def on_connect(tag):
         else:
             # サービス
             blocks_str = f" [bold magenta]{info['blocks']} blks[/bold magenta]" if info["blocks"] > 0 else ""
-            key_ver_str = f" [yellow]KV: 0x{info.get('key_ver', 0):04X}[/yellow]" if info["type"] != "area" else ""
+            key_ver_str = f" [yellow]KeyVer: 0x{info.get('key_ver', 0):04X}[/yellow]" if info["type"] != "area" else ""
             parent_node.add(f"[green]0x{sc:04X}[/green] ({info['type']}){key_ver_str}{blocks_str}")
     
     console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
