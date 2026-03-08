@@ -121,6 +121,18 @@ def test_search_service_code(protocol, sample_card):
     assert len(res) == 14
     assert struct.unpack("<H", res[10:12])[0] == 0x0000
 
+def test_request_response(protocol, sample_card):
+    protocol.current_idm = sample_card.idm
+    sample_card.mode = 0x01 # Authentication mode
+    
+    cmd = bytes([CommandCode.REQUEST_RESPONSE]) + sample_card.idm
+    result, res = protocol.handle(cmd)
+    
+    assert result == ProtocolResult.RESPONSE
+    assert res[1] == ResponseCode.REQUEST_RESPONSE_RES
+    assert res[2:10] == sample_card.idm
+    assert res[10] == 0x01
+
 def test_unknown_command(protocol, sample_card):
     cmd = bytes([0xFE, 0x01, 0x02]) # Unknown code 0xFE
     result, res = protocol.handle(cmd)

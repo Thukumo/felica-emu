@@ -29,6 +29,7 @@ class FeliCaProtocol(BaseProtocol):
         self._handlers = {
             CommandCode.POLLING: self._handle_polling,
             CommandCode.REQUEST_SERVICE: self._handle_request_service,
+            CommandCode.REQUEST_RESPONSE: self._handle_request_response,
             CommandCode.READ_WITHOUT_ENCRYPTION: self._handle_read_without_encryption,
             CommandCode.WRITE_WITHOUT_ENCRYPTION: self._handle_write_without_encryption,
             CommandCode.SEARCH_SERVICE_CODE: self._handle_search_service_code,
@@ -195,6 +196,15 @@ class FeliCaProtocol(BaseProtocol):
         self._emit_event("request_service", {"nodes": nodes})
         
         self._trace_packet("Request Service", "blue", cmd, res, f"Nodes: {', '.join(nodes)}")
+        return res
+
+    def _handle_request_response(self, cmd: bytes) -> bytes:
+        res = struct.pack("BB8sB", 11, ResponseCode.REQUEST_RESPONSE_RES, self.current_idm, self.card.mode)
+        
+        # Request Response イベント発行
+        self._emit_event("request_response", {"mode": self.card.mode})
+        
+        self._trace_packet("Request Response", "yellow", cmd, res, f"Mode: {self.card.mode}")
         return res
 
     def _parse_block_list(self, cmd: bytes, num_s: int, offset: int) -> Optional[Tuple[List[Tuple[int, int]], int]]:
