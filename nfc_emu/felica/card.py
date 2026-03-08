@@ -8,10 +8,11 @@ from ..base import BaseCard
 from .const import ServiceAttribute
 
 class FeliCaService:
-    def __init__(self, code: int, attr: Optional[str] = None, max_blocks: Optional[int] = None):
+    def __init__(self, code: int, attr: Optional[str] = None, max_blocks: Optional[int] = None, key_version: int = 0x0000):
         self.code = code
         self.attr = attr or ServiceAttribute.from_code(code)
         self.max_blocks = max_blocks
+        self.key_version = key_version
         self.memory: Dict[int, bytes] = {}
 
     def set_block(self, block_num: int, data: bytes):
@@ -98,11 +99,14 @@ class FeliCaCard(BaseCard):
             return info["idm"], info["pmm"]
         return self.idm, self.pmm
 
-    def add_service(self, code: int, attr: Optional[str] = None, max_blocks: Optional[int] = None):
+    def add_service(self, code: int, attr: Optional[str] = None, max_blocks: Optional[int] = None, key_version: int = 0x0000):
         if code not in self.services:
-            self.services[code] = FeliCaService(code, attr, max_blocks)
-        elif max_blocks is not None:
-            self.services[code].max_blocks = max_blocks
+            self.services[code] = FeliCaService(code, attr, max_blocks, key_version)
+        else:
+            if max_blocks is not None:
+                self.services[code].max_blocks = max_blocks
+            if key_version != 0x0000:
+                self.services[code].key_version = key_version
         
         if self._service_list and code not in self._service_list:
             self._service_list.append(code)
@@ -147,6 +151,9 @@ class FeliCaCard(BaseCard):
                 for code in self.services.keys()
             },
             "area_ends": {str(k): v for k, v in self.area_ends.items()},
+            "service_versions": {
+                str(code): svc.key_version for code, svc in self.services.items()
+            },
             "memory": {},
             "patches": []
         }
@@ -192,10 +199,13 @@ class FeliCaCard(BaseCard):
 
         raw_attrs = data.get("service_attrs", {})
         service_attrs = {int(k): v for k, v in raw_attrs.items()}
+        
+        raw_versions = data.get("service_versions", {})
+        service_versions = {int(k): v for k, v in raw_versions.items()}
 
         # 属性情報の流し込み
         for code, attr in service_attrs.items():
-            card.add_service(code, attr)
+            card.add_service(code, attr, key_version=service_versions.get(code, 0x0000))
 
         # メモリの読み込み
         memory = data.get("memory", {})

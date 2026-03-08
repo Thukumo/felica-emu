@@ -57,20 +57,20 @@ def test_polling_mismatch_sc(protocol):
     assert result == ProtocolResult.CONTINUE
     assert res == b""
 
-def test_request_service(protocol):
+def test_request_service(protocol, sample_card):
+    # Setup some versions
+    sample_card.add_service(0x100B, key_version=0x1234)
+    
     # Request Service for 0x100B (exists) and 0x9999 (not exists)
     cmd = bytes([CommandCode.REQUEST_SERVICE, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 
                  2, 0x0B, 0x10, 0x99, 0x99])
-    # IDm check is skipped in handle() for convenience if not matching current_idm, 
-    # but protocol.current_idm is initialized to card.idm.
     
-    # Update current_idm to match "zero" IDm in cmd for this test or vice versa
     protocol.current_idm = b"\x00" * 8
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE
     assert res[10] == 2 # num_nodes
-    assert res[11:13] == b"\x00\x00" # 0x100B exists
+    assert res[11:13] == struct.pack("<H", 0x1234)
     assert res[13:15] == b"\xFF\xFF" # 0x9999 not exists
 
 def test_read_without_encryption_success(protocol, sample_card):

@@ -187,8 +187,15 @@ class FeliCaProtocol(BaseProtocol):
         for i in range(num_nodes):
             s_code = struct.unpack("<H", cmd[OFFSET_NODE_LIST + i * 2:OFFSET_NODE_LIST + 2 + i * 2])[0]
             nodes.append(f"0x{s_code:04X}")
-            # 存在すれば 0x0000, なければ 0xFFFF
-            versions += b"\x00\x00" if s_code in self.card.services or (s_code in self.card.service_list) else b"\xFF\xFF"
+            
+            if s_code in self.card.services:
+                ver = self.card.services[s_code].key_version
+                versions += struct.pack("<H", ver)
+            elif s_code in self.card.service_list:
+                # メモリはないがリストにはある場合 (0x0000 など)
+                versions += b"\x00\x00"
+            else:
+                versions += b"\xFF\xFF"
         
         res = struct.pack("BB8sB", 11 + 2 * num_nodes, ResponseCode.REQUEST_SERVICE_RES, self.current_idm, num_nodes) + versions
         
