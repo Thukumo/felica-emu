@@ -27,17 +27,37 @@ class ServiceAttribute(IntEnum):
     # bit0=0, attr≠0x00: Protected
     # bit0=1, bit2=0: Plain
     # bit0=1, bit2=1: Encrypted
+    # bit1: 0=Non-cyclic, 1=Cyclic
+    # bit4,5: 10=Read/Write, 11=Read Only
 
     @classmethod
     def from_code(cls, code: int) -> str:
         attr = code & 0x3F
         if attr == 0x00:
             return "area"
+        
+        # 認証が必要な場合
         if not (attr & 0x01):
             return "protected"
         if attr & 0x04:
             return "encrypted"
-        return "plain"
+        
+        # Plain サービスの詳細判別
+        res = "plain"
+        
+        # R/O か R/W か (bit 4,5)
+        # 0x08 (bit3) も考慮が必要な場合があるが、一般的に 0x09/0x0D=RW, 0x0B/0x0F=RO
+        rw_bits = attr & 0x30
+        if rw_bits == 0x20:
+            res += " (R/W)"
+        elif rw_bits == 0x30:
+            res += " (R/O)"
+            
+        # サイクリックかどうか (bit 1)
+        if attr & 0x02:
+            res += " [C]"
+            
+        return res
 
 class ErrorCode(IntEnum):
     SUCCESS = 0x00

@@ -113,7 +113,7 @@ class FeliCaRenderer:
             else:
                 label = Text()
                 label.append(f"0x{sc:04X}", style="green")
-                label.append(f" ({attr})".ljust(14))
+                label.append(f" ({attr})".ljust(22))
                 label.append(f"KeyVer: 0x{info.get('key_ver', 0):04X}", style="yellow")
                 label.append("  ")
                 blocks = info.get("blocks", 0)
