@@ -48,6 +48,23 @@ def get_mode(tag):
         return res[10]
     return 0
 
+def get_key_versions(tag, service_codes):
+    """Request Service (0x02) を発行してサービスのキーバージョンを取得"""
+    versions = {}
+    # 一度にリクエストできるのは最大 32 ノード程度
+    chunk_size = 32
+    for i in range(0, len(service_codes), chunk_size):
+        chunk = service_codes[i:i+chunk_size]
+        data = bytes([len(chunk)]) + b"".join([struct.pack("<H", s) for s in chunk])
+        res = exchange(tag, 0x02, tag.identifier, data)
+        if res and len(res) >= 11:
+            num = res[10]
+            for j in range(num):
+                ver = struct.unpack("<H", res[11+j*2:13+j*2])[0]
+                if ver != 0xFFFF:
+                    versions[chunk[j]] = ver
+    return versions
+
 def _read_blocks(tag, idm, service_code, max_blocks=64):
     """Read Without Encryption (0x06) を発行してブロックを読み取る"""
     blocks = {}
@@ -141,7 +158,12 @@ def scan_and_read(tag, idm):
     except KeyboardInterrupt:
         console.print(f"\n[bold red][!] スキャンを中断しました。[/bold red]")
 
-    return service_list, service_attrs, area_ends, memory
+    # キーバージョンの取得
+    service_versions = {}
+    if service_list:
+        service_versions = get_key_versions(tag, service_list)
+
+    return service_list, service_attrs, area_ends, memory, service_versions
 
 def fix_ownership(path):
     """sudo で実行されている場合、ファイルの所有権を元のユーザーに戻す"""
@@ -176,6 +198,7 @@ def dump_card(tag, output_path):
     combined_service_attrs = {}
     combined_area_ends = {}
     combined_memory = {}
+    combined_service_versions = {}
 
     # 全システムコードを巡回
     for sc in all_sys_codes:
@@ -207,12 +230,13 @@ def dump_card(tag, output_path):
         }
         
         # スキャン実行
-        s_list, s_attrs, a_ends, mem = scan_and_read(tag, idm)
+        s_list, s_attrs, a_ends, mem, s_vers = scan_and_read(tag, idm)
         
         combined_service_list.update(s_list)
         combined_service_attrs.update(s_attrs)
         combined_area_ends.update(a_ends)
         combined_memory.update(mem)
+        combined_service_versions.update(s_vers)
 
     if not combined_service_list:
         console.print("\n[bold red][!] 有効なサービスが見つかりませんでした。[/bold red]")
@@ -228,6 +252,7 @@ def dump_card(tag, output_path):
         "service_list": sorted(list(combined_service_list)),
         "service_attrs": combined_service_attrs,
         "area_ends": combined_area_ends,
+        "service_versions": {str(k): v for k, v in combined_service_versions.items()},
         "memory": combined_memory,
         "patches": [],
     }
