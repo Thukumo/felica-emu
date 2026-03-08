@@ -186,16 +186,24 @@ def on_connect(tag):
             console.print(f"  [dim]0x{svc:04X}: No readable blocks[/dim]")
 
     # 最後にサマリーを表示 (Tree 構造)
-    root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+    if not found_sc_info:
+        console.print("\n[bold red]No services found.[/bold red]")
+        return False
+
+    root_info = found_sc_info[0]
+    root_sc = root_info["sc"]
+    root_end = root_info.get("end_val", 0xFFFE)
+    
+    root_tree = Tree(f"[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+    root_label = Text()
+    root_label.append(f"Root Area 0x{root_sc:04X}", style="bold white")
+    root_label.append(f" (End: 0x{root_end:04X})", style="dim")
     
     # 階層スタック: (area_code, tree_node, end_code)
-    # Root (0x0000) は特殊なのでデフォルトでスタックに入れておく
-    # FeliCa では 0x0000 は全領域をカバーしうるが、Search Service で出てきた場合は明示的な Area として扱う
-    stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
+    stack = [(root_sc, root_tree.add(root_label), root_end)]
 
-    for info in found_sc_info:
+    for info in found_sc_info[1:]:
         sc = info["sc"]
-        if sc == 0x0000: continue # Root は既に作成済み
         
         # 現在の SC が現在のエリアの範囲外であれば、スタックを戻す
         while len(stack) > 1 and sc > stack[-1][2]:

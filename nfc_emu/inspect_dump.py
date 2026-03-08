@@ -90,52 +90,67 @@ def main():
         console.print(Panel(header_table, title="[bold blue]FeliCa Card Inspection[/bold blue]", expand=False))
 
         # ─── サマリー Tree の表示 ───
-        root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
-        # FeliCa では 0x0000 は Root
-        stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
-
         # service_list が JSON にあればそれを使用し、なければ card.services から構築
         svc_codes = card.service_list
-
-        for sc in svc_codes:
-            if sc == 0x0000: continue
+        if not svc_codes:
+            console.print("\n[bold red]No services found in dump.[/bold red]")
+        else:
+            root_sc = svc_codes[0]
+            root_attr = card.get_service_attr(root_sc)
+            root_end = card.area_ends.get(root_sc, 0xFFFE)
             
-            while len(stack) > 1 and sc > stack[-1][2]:
-                stack.pop()
-            parent_node = stack[-1][1]
+            root_tree = Tree(f"[bold white]FeliCa Service/Area Tree Structure[/bold white]")
             
-            attr = card.get_service_attr(sc)
-            if attr == "area":
-                end_val = card.area_ends.get(sc, 0xFFFE)
-                label = Text()
-                label.append(f"Area 0x{sc:04X}", style="bold cyan")
-                label.append(f" (End: 0x{end_val:04X})", style="dim")
-                area_node = parent_node.add(label)
-                stack.append((sc, area_node, end_val))
+            if root_attr == "area":
+                root_label = Text()
+                root_label.append(f"Root Area 0x{root_sc:04X}", style="bold white")
+                root_label.append(f" (End: 0x{root_end:04X})", style="dim")
+                root_node = root_tree.add(root_label)
+                stack = [(root_sc, root_node, root_end)]
+                items_to_process = svc_codes[1:]
             else:
-                label = Text()
-                label.append(f"0x{sc:04X}", style="green")
-                label.append(f" ({attr})".ljust(14))
-                
-                # キーバージョンの取得
-                key_ver = 0
-                if sc in card.services:
-                    key_ver = card.services[sc].key_version
-                label.append(f"KeyVer: 0x{key_ver:04X}", style="yellow")
-                label.append("  ")
-                
-                num_blocks = 0
-                if sc in card.services:
-                    num_blocks = len(card.services[sc].memory)
-                
-                if num_blocks > 0:
-                    label.append(f"{num_blocks:>2} blocks", style="bold magenta")
-                else:
-                    label.append(" - blocks", style="dim")
-                parent_node.add(label)
+                # 稀なケース：ルートがエリアではない場合は仮想的なルートを作成
+                virtual_root = root_tree.add("[bold white]System Root[/bold white]")
+                stack = [(None, virtual_root, 0xFFFF)]
+                items_to_process = svc_codes
 
-        console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
-        console.print(root_tree)
+            for sc in items_to_process:
+                while len(stack) > 1 and sc > stack[-1][2]:
+                    stack.pop()
+                parent_node = stack[-1][1]
+                
+                attr = card.get_service_attr(sc)
+                if attr == "area":
+                    end_val = card.area_ends.get(sc, 0xFFFE)
+                    label = Text()
+                    label.append(f"Area 0x{sc:04X}", style="bold cyan")
+                    label.append(f" (End: 0x{end_val:04X})", style="dim")
+                    area_node = parent_node.add(label)
+                    stack.append((sc, area_node, end_val))
+                else:
+                    label = Text()
+                    label.append(f"0x{sc:04X}", style="green")
+                    label.append(f" ({attr})".ljust(14))
+                    
+                    # キーバージョンの取得
+                    key_ver = 0
+                    if sc in card.services:
+                        key_ver = card.services[sc].key_version
+                    label.append(f"KeyVer: 0x{key_ver:04X}", style="yellow")
+                    label.append("  ")
+                    
+                    num_blocks = 0
+                    if sc in card.services:
+                        num_blocks = len(card.services[sc].memory)
+                    
+                    if num_blocks > 0:
+                        label.append(f"{num_blocks:>2} blocks", style="bold magenta")
+                    else:
+                        label.append(" - blocks", style="dim")
+                    parent_node.add(label)
+
+            console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
+            console.print(root_tree)
 
         # ─── 各サービスのメモリデータ (Hexdump) ───
         console.print("\n[bold yellow]Memory Contents:[/bold yellow]")

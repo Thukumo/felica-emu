@@ -154,12 +154,23 @@ def scan_and_read(tag, idm):
         service_versions = get_key_versions(tag, service_list)
 
     # サマリーを表示 (Tree 構造)
-    root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
-    stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
+    if not found_sc_info:
+        return service_list, service_attrs, area_ends, memory, service_versions
 
-    for info in found_sc_info:
+    root_info = found_sc_info[0]
+    root_sc = root_info["sc"]
+    root_end = root_info.get("end_val", 0xFFFE)
+    
+    root_tree = Tree(f"[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+    root_label = Text()
+    root_label.append(f"Root Area 0x{root_sc:04X}", style="bold white")
+    root_label.append(f" (End: 0x{root_end:04X})", style="dim")
+    
+    # 階層スタック: (area_code, tree_node, end_code)
+    stack = [(root_sc, root_tree.add(root_label), root_end)]
+
+    for info in found_sc_info[1:]:
         sc = info["sc"]
-        if sc == 0x0000: continue
         while len(stack) > 1 and sc > stack[-1][2]:
             stack.pop()
         parent_node = stack[-1][1]
