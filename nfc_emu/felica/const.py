@@ -36,26 +36,26 @@ class ServiceAttribute(IntEnum):
         if attr == 0x00:
             return "area"
         
-        # 認証が必要な場合
+        # 認証が必要な場合 (bit0=0)
         if not (attr & 0x01):
-            return "protected"
-        if attr & 0x04:
-            return "encrypted"
-        
-        # Plain サービスの詳細判別
-        res = "plain"
-        
-        # R/O か R/W か (bit 4,5)
-        # 0x08 (bit3) も考慮が必要な場合があるが、一般的に 0x09/0x0D=RW, 0x0B/0x0F=RO
-        rw_bits = attr & 0x30
-        if rw_bits == 0x20:
-            res += " (R/W)"
-        elif rw_bits == 0x30:
-            res += " (R/O)"
+            res = "protected"
+            # bit2 は Protected の場合 Encryption を指すことが多い
+            if attr & 0x04:
+                res = "encrypted"
+        else:
+            res = "plain"
             
-        # サイクリックかどうか (bit 1)
-        if attr & 0x02:
-            res += " [C]"
+        # サービスビット (bit3) が立っている場合のみ詳細を表示
+        if attr & 0x08:
+            # R/O か R/W か (bit 2)
+            if attr & 0x04:
+                res += " (R/O)"
+            else:
+                res += " (R/W)"
+                
+            # サイクリックかどうか (bit 1)
+            if attr & 0x02:
+                res += " [C]"
             
         return res
 
