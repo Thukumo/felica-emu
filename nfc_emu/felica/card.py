@@ -203,17 +203,28 @@ class FeliCaCard(BaseCard):
         raw_versions = data.get("service_versions", {})
         service_versions = {int(k): v for k, v in raw_versions.items()}
 
+        memory = data.get("memory", {})
+        memory_keys = {int(k) for k in memory.keys()}
+
+        # 存在する全サービスコードの集合 (attrs, versions, memory から抽出)
+        all_svc_codes = set(service_attrs.keys()) | set(service_versions.keys()) | memory_keys
+
         # 属性情報の流し込み
-        for code, attr in service_attrs.items():
+        for code in sorted(all_svc_codes):
+            attr = service_attrs.get(code, "unknown")
+            # メモリがあって属性がない場合は plain とみなす
+            if attr == "unknown" and code in memory_keys:
+                attr = "plain"
+            
             card.add_service(code, attr, key_version=service_versions.get(code, 0x0000))
 
         # メモリの読み込み
-        memory = data.get("memory", {})
         for svc_str, blocks in memory.items():
             svc = int(svc_str)
             if blocks:
                 max_blk = max(int(b) for b in blocks.keys())
-                card.add_service(svc, max_blocks=max_blk + 1)
+                # 既存サービスの max_blocks を更新
+                card.services[svc].max_blocks = max_blk + 1
             for b_str, hex_data in blocks.items():
                 card.set_block(svc, int(b_str), bytes.fromhex(hex_data))
 

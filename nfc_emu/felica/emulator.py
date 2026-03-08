@@ -10,6 +10,7 @@ from typing import Optional
 from ..base import BaseEmulator
 from .card import FeliCaCard
 from .protocol import FeliCaProtocol
+from .scanner import FeliCaRenderer
 
 from rich.console import Console
 from rich.panel import Panel
@@ -47,6 +48,12 @@ class FeliCaEmulator(BaseEmulator):
             tsn = data.get("tsn", 0)
             tsn_info = f" (TSN={tsn})" if tsn > 0 else ""
             console.print(f"  [bold green][Polling][/bold green] SC=0x{req_sc:04X} -> Match SC=0x{matched_sc:04X}{tsn_info}")
+
+        elif event_type == "request_response":
+            mode = data.get("mode", 0)
+            mode_map = {0: "Normal", 1: "Authentication"}
+            mode_str = mode_map.get(mode, f"Custom (0x{mode:02X})")
+            console.print(f"  [bold yellow][Request Response][/bold yellow] Mode: {mode_str}")
 
         elif event_type == "request_service":
             nodes = data.get("nodes", [])
@@ -98,6 +105,20 @@ class FeliCaEmulator(BaseEmulator):
                 info_table.add_row("Primary SC", f"[yellow]0x{self.card.primary_sys_code.hex().upper()}[/yellow]")
                 
                 console.print(Panel(info_table, title="[bold blue]FeliCa Emulator[/bold blue]", expand=False))
+                
+                # エミュレート対象カードのサマリーを表示
+                found_sc_info = []
+                for sc in self.card.service_list:
+                    attr = self.card.get_service_attr(sc)
+                    num_blocks = len(self.card.services[sc].memory) if sc in self.card.services else 0
+                    key_ver = self.card.services[sc].key_version if sc in self.card.services else 0
+                    found_sc_info.append({
+                        "sc": sc, "type": attr, "key_ver": key_ver,
+                        "blocks": num_blocks, "end_val": self.card.area_ends.get(sc, 0xFFFE)
+                    })
+                console.print("[bold yellow]Emulated Card Structure:[/bold yellow]")
+                console.print(FeliCaRenderer.render_service_tree(found_sc_info))
+                
                 console.print("[italic white]Waiting for reader... (Ctrl+C to stop)[/italic white]\n")
 
                 while not self.stop_event.is_set():
