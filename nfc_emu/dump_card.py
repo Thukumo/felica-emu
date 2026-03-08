@@ -13,6 +13,8 @@ from .felica.const import ServiceAttribute
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.tree import Tree
+from rich.text import Text
 
 console = Console()
 
@@ -87,16 +89,11 @@ def scan_and_read(tag, idm):
     service_attrs = {}
     area_ends = {}
     memory = {}
+    found_sc_info = [] # (idx, sc, type, details, blocks, end_val)
 
     from rich import box
     console.print(f"[*] サービスをスキャン中...\n")
     
-    svc_table = Table(box=box.SIMPLE)
-    svc_table.add_column("Index", justify="right", style="dim")
-    svc_table.add_column("Service Code", style="bold cyan")
-    svc_table.add_column("Attribute", style="italic")
-    svc_table.add_column("Blocks", justify="right")
-
     try:
         # FeliCa のインデックス走査 (最大 256 程度が一般的)
         for idx in range(512):
@@ -117,7 +114,7 @@ def scan_and_read(tag, idm):
             service_list.append(found)
             service_attrs[str(found)] = attr
             
-            # エリアコード（下位 6bit == 0）の場合、終端コードを保存
+            end_code = None
             if (found & 0x3F) == 0x00 and len(res) >= 14:
                 end_code = struct.unpack("<H", res[12:14])[0]
                 area_ends[str(found)] = end_code
@@ -128,32 +125,10 @@ def scan_and_read(tag, idm):
                 if blocks:
                     memory[str(found)] = blocks
                     read_count = len(blocks)
-                    
-                    # ブロックデータのテーブル構築
-                    svc_blk_table = Table(show_header=True, box=box.SIMPLE_HEAD, header_style="bold magenta")
-                    svc_blk_table.add_column("Blk", justify="right", style="dim")
-                    svc_blk_table.add_column("Data (HEX)", style="green")
-                    svc_blk_table.add_column("ASCII", style="white")
-
-                    for b_num, hex_data in blocks.items():
-                        raw = bytes.fromhex(hex_data)
-                        ascii_str = "".join([chr(c) if 32 <= c <= 126 else "." for c in raw])
-                        svc_blk_table.add_row(str(b_num), hex_data.upper(), ascii_str)
-                    
-                    console.print(Panel(svc_blk_table, title=f"[bold cyan]Service 0x{found:04X} ({attr})[/bold cyan]", expand=False))
-                else:
-                    console.print(f"  [italic dim]0x{found:04X}: No readable blocks[/italic dim]")
             
-            # サマリー行の追加
-            svc_table.add_row(
-                str(idx), 
-                f"0x{found:04X}", 
-                attr, 
-                f"[bold white]{read_count}[/bold white]" if read_count > 0 else "[dim]-[/dim]"
-            )
-        
-        console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
-        console.print(svc_table)
+            found_sc_info.append({
+                "idx": idx, "sc": found, "type": attr, "blocks": read_count, "end_val": end_code
+            })
 
     except KeyboardInterrupt:
         console.print(f"\n[bold red][!] スキャンを中断しました。[/bold red]")
@@ -163,6 +138,37 @@ def scan_and_read(tag, idm):
     if service_list:
         service_versions = get_key_versions(tag, service_list)
 
+    # サマリーを表示 (Tree 構造)
+    root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+    stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
+
+    for info in found_sc_info:
+        sc = info["sc"]
+        if sc == 0x0000: continue
+        while len(stack) > 1 and sc > stack[-1][2]:
+            stack.pop()
+        parent_node = stack[-1][1]
+        
+        if info["type"] == "area":
+            end_val = info.get("end_val", 0xFFFE)
+            label = Text()
+            label.append(f"Area 0x{sc:04X}", style="bold cyan")
+            label.append(f" (End: 0x{end_val:04X})", style="dim")
+            area_node = parent_node.add(label)
+            stack.append((sc, area_node, end_val))
+        else:
+            label = Text()
+            label.append(f"0x{sc:04X}", style="green")
+            label.append(f" ({info['type']})".ljust(14))
+            label.append(f"KeyVer: 0x{service_versions.get(sc, 0x0000):04X}", style="yellow")
+            label.append("  ")
+            if info["blocks"] > 0:
+                label.append(f"{info['blocks']:>2} blocks", style="bold magenta")
+            else:
+                label.append(" - blocks", style="dim")
+            parent_node.add(label)
+
+    console.print(root_tree)
     return service_list, service_attrs, area_ends, memory, service_versions
 
 def fix_ownership(path):
