@@ -1,0 +1,20 @@
+[project]
+name = "nfc-emu"
+version = "0.1.0"
+dependencies = [
+    "nfcpy",
+    "tqdm",
+    "pyusb",
+    "pick",
+    "rich"
+]
+
+[project.scripts]
+nfc-dump = "nfc_emu.dump_card:main"
+nfc-emu = "nfc_emu.emulate_card:main"
+nfc-inspect = "nfc_emu.inspect_dump:main"
+nfc-probe = "nfc_emu.probe_card:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build-meta"
