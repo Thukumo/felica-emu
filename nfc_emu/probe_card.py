@@ -20,6 +20,7 @@ from rich.logging import RichHandler
 from rich.table import Table
 from rich.panel import Panel
 from rich.tree import Tree
+from rich.text import Text
 from rich import box
 
 
@@ -204,13 +205,23 @@ def on_connect(tag):
         
         if info["type"] == "area":
             end_val = info.get("end_val", 0xFFFE)
-            area_node = parent_node.add(f"[bold cyan]Area 0x{sc:04X}[/bold cyan] [dim](End: 0x{end_val:04X})[/dim]")
+            label = Text()
+            label.append(f"Area 0x{sc:04X}", style="bold cyan")
+            label.append(f" (End: 0x{end_val:04X})", style="dim")
+            area_node = parent_node.add(label)
             stack.append((sc, area_node, end_val))
         else:
             # サービス
-            blocks_str = f" [bold magenta]{info['blocks']} blks[/bold magenta]" if info["blocks"] > 0 else ""
-            key_ver_str = f" [yellow]KeyVer: 0x{info.get('key_ver', 0):04X}[/yellow]" if info["type"] != "area" else ""
-            parent_node.add(f"[green]0x{sc:04X}[/green] ({info['type']}){key_ver_str}{blocks_str}")
+            label = Text()
+            label.append(f"0x{sc:04X}", style="green")
+            label.append(f" ({info['type']})".ljust(14))
+            label.append(f"KeyVer: 0x{info.get('key_ver', 0):04X}", style="yellow")
+            label.append("  ")
+            if info["blocks"] > 0:
+                label.append(f"{info['blocks']:>2} blocks", style="bold magenta")
+            else:
+                label.append("- blocks", style="dim")
+            parent_node.add(label)
     
     console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
     console.print(root_tree)
