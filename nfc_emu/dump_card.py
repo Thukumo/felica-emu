@@ -125,6 +125,21 @@ def scan_and_read(tag, idm):
                 if blocks:
                     memory[str(found)] = blocks
                     read_count = len(blocks)
+                    
+                    # ブロックデータのテーブル表示 (nfc-probe と同様)
+                    svc_blk_table = Table(show_header=True, box=box.SIMPLE_HEAD, header_style="bold magenta")
+                    svc_blk_table.add_column("Blk", justify="right", style="dim")
+                    svc_blk_table.add_column("Data (HEX)", style="green")
+                    svc_blk_table.add_column("ASCII", style="white")
+
+                    for b_num, hex_data in blocks.items():
+                        raw = bytes.fromhex(hex_data)
+                        ascii_str = "".join([chr(c) if 32 <= c <= 126 else "." for c in raw])
+                        svc_blk_table.add_row(str(b_num), hex_data.upper(), ascii_str)
+                    
+                    console.print(Panel(svc_blk_table, title=f"[bold cyan]Service 0x{found:04X} ({attr})[/bold cyan]", expand=False))
+                else:
+                    console.print(f"  [italic dim]0x{found:04X}: No readable blocks[/italic dim]")
             
             found_sc_info.append({
                 "idx": idx, "sc": found, "type": attr, "blocks": read_count, "end_val": end_code
