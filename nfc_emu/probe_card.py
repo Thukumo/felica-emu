@@ -54,6 +54,24 @@ def search_service(clf, idm: bytes, idx: int):
     return None, None
 
 
+def get_key_versions(clf, idm, service_codes):
+    """Request Service (0x02) を発行してサービスのキーバージョンを取得"""
+    versions = {}
+    chunk_size = 32
+    for i in range(0, len(service_codes), chunk_size):
+        chunk = service_codes[i:i+chunk_size]
+        data = bytes([len(chunk)]) + b"".join([struct.pack("<H", s) for s in chunk])
+        req = bytes([10 + len(data), 0x02]) + idm + data
+        res = exchange(clf, req)
+        if res and len(res) >= 11:
+            num = res[10]
+            for j in range(num):
+                ver = struct.unpack("<H", res[11+j*2:13+j*2])[0]
+                if ver != 0xFFFF:
+                    versions[chunk[j]] = ver
+    return versions
+
+
 def read_block(clf, idm: bytes, service: int, block: int):
     """Read Without Encryption で 1 ブロック読み取り、16バイトを返す（エラー時 None）。"""
     svc_le = struct.pack("<H", service)
@@ -126,6 +144,13 @@ def on_connect(tag):
             "idx": idx, "sc": sc, "type": svc_type, "details": details, "blocks": 0
         })
 
+    # キーバージョンを一括取得
+    key_versions = {}
+    if services:
+        key_versions = get_key_versions(clf, idm, services)
+    for info in found_sc_info:
+        info["key_ver"] = key_versions.get(info["sc"], 0x0000)
+
     # ─── 3. ブロック読み取り ───────────────────────────────────────
     console.print("\n[bold yellow][3] Block Reading (Plain Services Only)[/bold yellow]")
     for sc_data in found_sc_info:
@@ -162,6 +187,7 @@ def on_connect(tag):
     svc_table = Table(box=box.SIMPLE)
     svc_table.add_column("Index", justify="right", style="dim")
     svc_table.add_column("Service Code", style="bold cyan")
+    svc_table.add_column("Key Ver", style="yellow")
     svc_table.add_column("Attribute", style="italic")
     svc_table.add_column("Blocks", justify="right")
     svc_table.add_column("Details")
@@ -170,6 +196,7 @@ def on_connect(tag):
         svc_table.add_row(
             str(info["idx"]), 
             f"0x{info['sc']:04X}", 
+            f"0x{info.get('key_ver', 0):04X}" if info["type"] != "area" else "-",
             info["type"], 
             f"[bold white]{info['blocks']}[/bold white]" if info["blocks"] > 0 else "[dim]-[/dim]",
             info["details"]
