@@ -19,6 +19,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
 from rich.panel import Panel
+from rich.tree import Tree
 from rich import box
 
 
@@ -141,7 +142,7 @@ def on_connect(tag):
             svc_type = attr_name
         
         found_sc_info.append({
-            "idx": idx, "sc": sc, "type": svc_type, "details": details, "blocks": 0
+            "idx": idx, "sc": sc, "type": svc_type, "details": details, "blocks": 0, "end_val": end_area
         })
 
     # キーバージョンを一括取得
@@ -183,27 +184,36 @@ def on_connect(tag):
         else:
             console.print(f"  [dim]0x{svc:04X}: No readable blocks[/dim]")
 
-    # 最後にサマリーを表示
-    svc_table = Table(box=box.SIMPLE)
-    svc_table.add_column("Index", justify="right", style="dim")
-    svc_table.add_column("Service Code", style="bold cyan")
-    svc_table.add_column("Key Ver", style="yellow")
-    svc_table.add_column("Attribute", style="italic")
-    svc_table.add_column("Blocks", justify="right")
-    svc_table.add_column("Details")
+    # 最後にサマリーを表示 (Tree 構造)
+    root_tree = Tree("[bold white]FeliCa Service/Area Tree Structure[/bold white]")
+    
+    # 階層スタック: (area_code, tree_node, end_code)
+    # Root (0x0000) は特殊なのでデフォルトでスタックに入れておく
+    # FeliCa では 0x0000 は全領域をカバーしうるが、Search Service で出てきた場合は明示的な Area として扱う
+    stack = [(0x0000, root_tree.add("[bold white]Root Area (0x0000)[/bold white]"), 0xFFFE)]
 
     for info in found_sc_info:
-        svc_table.add_row(
-            str(info["idx"]), 
-            f"0x{info['sc']:04X}", 
-            f"0x{info.get('key_ver', 0):04X}" if info["type"] != "area" else "-",
-            info["type"], 
-            f"[bold white]{info['blocks']}[/bold white]" if info["blocks"] > 0 else "[dim]-[/dim]",
-            info["details"]
-        )
+        sc = info["sc"]
+        if sc == 0x0000: continue # Root は既に作成済み
+        
+        # 現在の SC が現在のエリアの範囲外であれば、スタックを戻す
+        while len(stack) > 1 and sc > stack[-1][2]:
+            stack.pop()
+            
+        parent_node = stack[-1][1]
+        
+        if info["type"] == "area":
+            end_val = info.get("end_val", 0xFFFE)
+            area_node = parent_node.add(f"[bold cyan]Area 0x{sc:04X}[/bold cyan] [dim](End: 0x{end_val:04X})[/dim]")
+            stack.append((sc, area_node, end_val))
+        else:
+            # サービス
+            blocks_str = f" [bold magenta]{info['blocks']} blks[/bold magenta]" if info["blocks"] > 0 else ""
+            key_ver_str = f" [yellow]KV: 0x{info.get('key_ver', 0):04X}[/yellow]" if info["type"] != "area" else ""
+            parent_node.add(f"[green]0x{sc:04X}[/green] ({info['type']}){key_ver_str}{blocks_str}")
     
     console.print("\n[bold yellow]Service Enumeration Summary:[/bold yellow]")
-    console.print(svc_table)
+    console.print(root_tree)
     console.print("\n[bold green]Scan Completed[/bold green]")
     return False
 
