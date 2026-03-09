@@ -150,6 +150,29 @@ class FeliCaCard(BaseCard):
             return self.services[service_code].attr
         return ServiceAttribute.from_code(service_code)
 
+    def get_area_end(self, s_code: int) -> int:
+        """Area の終端コードを取得する。指定がなければ次の Area の手前を推測する。"""
+        if s_code in self.area_ends:
+            return self.area_ends[s_code]
+        
+        # 0x0000 (Root) の特殊対応
+        if s_code == 0x0000:
+            return 0xFFFE
+        
+        # 次の Area を探す
+        all_codes = self.service_list
+        try:
+            idx = all_codes.index(s_code)
+            for i in range(idx + 1, len(all_codes)):
+                next_code = all_codes[i]
+                if (next_code & 0x3F) == 0x00: # Area
+                    return next_code - 1
+        except ValueError:
+            pass
+            
+        # 見つからない場合は従来のヒューリスティック
+        return s_code | 0x00FF
+
     def get_block(self, service_code: int, block_num: int) -> Optional[bytes]:
         if service_code in self.services:
             return self.services[service_code].get_block(block_num)

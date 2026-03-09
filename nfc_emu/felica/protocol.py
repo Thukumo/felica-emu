@@ -233,6 +233,8 @@ class FeliCaProtocol(BaseProtocol):
             else: # 3-byte format
                 if len(cmd) < offset + 3: return None
                 s_idx = (b_info & 0x78) >> 3
+                # Byte 2 (下位) と Byte 3 (上位) の計16ビットをブロック番号として読み取る
+                # Bit 0-2 (Access Mode) はブロック番号には含まれない
                 b_num = struct.unpack("<H", cmd[offset + 1:offset + 3])[0]
                 offset += 3
             block_list.append((s_idx, b_num))
@@ -334,8 +336,8 @@ class FeliCaProtocol(BaseProtocol):
             data = block_data_list[i]
             
             # 属性チェック (読み取り専用サービスへの書き込み拒否)
-            attr_val = svc & 0x3F
-            if attr_val in (0x0B, 0x0F, 0x07):
+            # FeliCa仕様の下位4ビット属性 0x0B (RO-NonAuth), 0x0F (RO-Auth) をチェック
+            if (svc & 0x0F) in (0x0B, 0x0F):
                 return self._error_response(ResponseCode.WRITE_WITHOUT_ENCRYPTION_RES, StatusFlag2.SECURITY_ERROR)
             
             # --- Hook: on_write ---
@@ -406,12 +408,7 @@ class FeliCaProtocol(BaseProtocol):
                 self._log_extra = [f"0x{s_code:04X}"]
 
             if (s_code & 0x3F) == 0x00: # Area
-                # area_ends から取得し、なければヒューリスティックに計算
-                if s_code in self.card.area_ends:
-                    end_area = self.card.area_ends[s_code]
-                else:
-                    end_area = 0xFFFE if s_code == 0x0000 else (s_code | 0x00FF)
-                
+                end_area = self.card.get_area_end(s_code)
                 return struct.pack("BB8s", 14, ResponseCode.SEARCH_SERVICE_CODE_RES, self.current_idm) + struct.pack("<HH", s_code, end_area)
             return struct.pack("BB8s", 12, ResponseCode.SEARCH_SERVICE_CODE_RES, self.current_idm) + struct.pack("<H", s_code)
         else:
