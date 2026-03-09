@@ -132,7 +132,8 @@ class FeliCaRenderer:
     @staticmethod
     def render_block_panel(service_code: int, attr: str, blocks: Dict[int, bytes]) -> Panel:
         table = Table(show_header=True, box=box.SIMPLE_HEAD, header_style="bold magenta")
-        table.add_column("Blk", justify="right", style="dim")
+        blk_col_name = "Hist" if attr == "cyclic" else "Blk"
+        table.add_column(blk_col_name, justify="right", style="dim")
         table.add_column("Data (HEX)", style="green")
         table.add_column("ASCII", style="white")
 

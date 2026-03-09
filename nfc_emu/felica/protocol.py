@@ -260,24 +260,23 @@ class FeliCaProtocol(BaseProtocol):
             logger.warning(f"Read: Too many blocks ({num_b})")
             return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.BLOCK_ERROR)
 
-        payload = b""
+        # --- 事前バリデーション ---
         for s_idx, b_num in block_list:
             if s_idx >= len(services):
-                self.flush_logs()
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.BLOCK_ERROR)
-
             svc = services[s_idx]
             attr = self.card.get_service_attr(svc)
-
             if attr in ("protected", "encrypted"):
-                self.flush_logs()
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.SECURITY_ERROR)
-
-            block_data = self.card.get_block(svc, b_num)
-            if block_data is None:
-                self.flush_logs()
+            if self.card.get_block(svc, b_num) is None:
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.BLOCK_ERROR)
 
+        # --- 実際の読み取り ---
+        payload = b""
+        for s_idx, b_num in block_list:
+            svc = services[s_idx]
+            block_data = self.card.get_block(svc, b_num)
+            
             # --- Hook: on_read ---
             try:
                 hook_res = self.hooks.on_read(svc, b_num, block_data)
@@ -285,7 +284,6 @@ class FeliCaProtocol(BaseProtocol):
                     block_data = hook_res
             except Exception as e:
                 logger.error(f"on_read hook error: {e}")
-                self.flush_logs()
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.SECURITY_ERROR)
 
             # ログバッファの更新
