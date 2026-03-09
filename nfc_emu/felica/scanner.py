@@ -72,7 +72,11 @@ class FeliCaScanner:
     @staticmethod
     def read_block(tag, idm: bytes, service_code: int, block_num: int) -> Optional[bytes]:
         # req: [0x06, サービス数(1), サービスリスト(2*n), ブロック数(1), ブロックリスト(2*m)]
-        req_data = bytes([1]) + struct.pack("<H", service_code) + bytes([1, 0x80, block_num])
+        if block_num <= 255:
+            block_list = bytes([0x80, block_num])
+        else:
+            block_list = struct.pack("<BH", 0x00, block_num)
+        req_data = bytes([1]) + struct.pack("<H", service_code) + bytes([1]) + block_list
         res = exchange(tag, CommandCode.READ_WITHOUT_ENCRYPTION, idm, req_data)
         if res and len(res) >= 29 and res[10] == 0x00:
             return res[13:29]

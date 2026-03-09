@@ -225,7 +225,7 @@ class FeliCaProtocol(BaseProtocol):
             if b_info & 0x80: # 2-byte format
                 if len(cmd) < offset + 2: return None
                 s_idx = (b_info & 0x78) >> 3
-                b_num = ((b_info & 0x06) << 7) | cmd[offset + 1]
+                b_num = cmd[offset + 1]
                 offset += 2
             else: # 3-byte format
                 if len(cmd) < offset + 3: return None
