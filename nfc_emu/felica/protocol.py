@@ -349,10 +349,36 @@ class FeliCaProtocol(BaseProtocol):
             ops.append((svc, b_num, data))
 
         # --- 実際の書き込み (全バリデーション通過後) ---
+        # 連続する同じサービスへの書き込みをグループ化 (サイクリック対応)
+        service_groups = []
+        if ops:
+            current_svc = ops[0][0]
+            current_ops = []
+            for svc, b_num, data in ops:
+                if svc == current_svc:
+                    current_ops.append((b_num, data))
+                else:
+                    service_groups.append((current_svc, current_ops))
+                    current_svc = svc
+                    current_ops = [(b_num, data)]
+            service_groups.append((current_svc, current_ops))
+
         write_log_ops = []
-        for svc, b_num, data in ops:
-            self.card.set_block(svc, b_num, data)
-            write_log_ops.append(f"0x{svc:04X}:B{b_num}")
+        for svc_code, svc_ops in service_groups:
+            attr = self.card.get_service_attr(svc_code)
+            if attr == "cyclic":
+                # サイクリックサービス: ブロックリスト順に B0, B1... となるように一括シフト書き込み
+                data_list = [d for _, d in svc_ops]
+                if svc_code not in self.card.services:
+                    self.card.add_service(svc_code, attr="cyclic")
+                self.card.services[svc_code].set_cyclic_blocks(data_list)
+                for b_num, _ in svc_ops:
+                    write_log_ops.append(f"0x{svc_code:04X}:B{b_num}")
+            else:
+                # 通常サービス: 指定されたブロック番号に書き込み
+                for b_num, data in svc_ops:
+                    self.card.set_block(svc_code, b_num, data)
+                    write_log_ops.append(f"0x{svc_code:04X}:B{b_num}")
 
         self._emit_event("write", {"ops": write_log_ops})
         self._trace_packet("Write", "red", cmd, b"", f"Ops: {', '.join(write_log_ops)}")
