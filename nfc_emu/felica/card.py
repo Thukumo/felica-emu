@@ -23,20 +23,38 @@ class FeliCaService:
             self.max_blocks = block_num + 1
 
     def set_cyclic_block(self, data: bytes):
-        """サイクリックサービスへの書き込み（データをシフトして最新を B0 にする、サイズは固定）"""
-        if len(data) != 16:
-            raise ValueError("Block data must be 16 bytes")
-        
-        # サービスが持っているべきブロック数（設定がなければ現在の最大値+1）
-        limit = self.max_blocks if self.max_blocks is not None else (max(self.memory.keys()) + 1 if self.memory else 1)
+        """サイクリックサービスへの書き込み（データをシフトして最新を B0 にする）"""
+        self.set_cyclic_blocks([data])
 
-        # データを後ろにシフト
-        for b in range(limit - 1, 0, -1):
-            if (b - 1) in self.memory:
-                self.memory[b] = self.memory[b - 1]
-            
-        # 最新をブロック 0 にセット
-        self.memory[0] = data
+    def set_cyclic_blocks(self, data_list: List[bytes]):
+        """複数のブロックをサイクリックサービスへ一括で書き込む (data_list[0] が最新として B0 になる)"""
+        for data in data_list:
+            if len(data) != 16:
+                raise ValueError("Block data must be 16 bytes")
+
+        num_new = len(data_list)
+        if num_new == 0: return
+
+        # 制限 (max_blocks) がある場合はそれを尊重、なければ現在の最大 + num_new
+        if self.max_blocks is not None:
+            limit = self.max_blocks
+        else:
+            limit = (max(self.memory.keys()) + 1 if self.memory else 0) + num_new
+            # 動的に max_blocks を更新していく
+            self.max_blocks = limit
+
+        # データを num_new 分だけ後ろに一気にシフト
+        for b in range(limit - 1, num_new - 1, -1):
+            if (b - num_new) in self.memory:
+                self.memory[b] = self.memory[b - num_new]
+            elif b in self.memory:
+                # limit を超えた古いデータは削除
+                del self.memory[b]
+
+        # データを B0..B(num_new-1) にセット
+        for i, data in enumerate(data_list):
+            if i < limit:
+                self.memory[i] = data
 
     def get_block(self, block_num: int) -> Optional[bytes]:
         return self.memory.get(block_num)
@@ -103,6 +121,8 @@ class FeliCaCard(BaseCard):
         if code not in self.services:
             self.services[code] = FeliCaService(code, attr, max_blocks, key_version)
         else:
+            if attr is not None:
+                self.services[code].attr = attr
             if max_blocks is not None:
                 self.services[code].max_blocks = max_blocks
             if key_version != 0x0000:

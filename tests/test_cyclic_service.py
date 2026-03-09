@@ -29,3 +29,29 @@ def test_cyclic_service_memory_limit():
     assert svc.memory[1] == b"DATA_2__________"
     assert svc.memory[2] == b"DATA_1__________"
     assert 3 not in svc.memory
+
+def test_cyclic_multi_block_write():
+    from nfc_emu.felica.card import FeliCaCard
+    idm = bytes.fromhex("0123456789ABCDEF")
+    pmm = bytes.fromhex("0123456789ABCDEF")
+    sys_code = bytes.fromhex("FE00")
+    card = FeliCaCard(idm, pmm, sys_code)
+    
+    # 5ブロックのサイクリックサービス
+    card.add_service(0x1001, "cyclic", max_blocks=5)
+    svc = card.services[0x1001]
+    
+    # 2ブロック一括書き込み (リストの先頭が最新 B0 になる期待)
+    svc.set_cyclic_blocks([b"DATA_A__________", b"DATA_B__________"])
+    
+    assert svc.memory[0] == b"DATA_A__________"
+    assert svc.memory[1] == b"DATA_B__________"
+    assert len(svc.memory) == 2
+    
+    # さらに1ブロック追加
+    svc.set_cyclic_block(b"DATA_C__________")
+    
+    assert svc.memory[0] == b"DATA_C__________"
+    assert svc.memory[1] == b"DATA_A__________"
+    assert svc.memory[2] == b"DATA_B__________"
+    assert len(svc.memory) == 3
