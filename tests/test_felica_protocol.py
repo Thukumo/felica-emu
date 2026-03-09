@@ -12,18 +12,18 @@ def sample_card():
     sys_code = bytes.fromhex("FE00")
     card = FeliCaCard(idm, pmm, sys_code)
     
-    # サービスとデータのセットアップ
-    # 0x100B: Plain R-only
-    card.add_service(0x100B, "plain")
-    card.set_block(0x100B, 0, b"DATA_BLOCK_0____")
-    card.set_block(0x100B, 1, b"DATA_BLOCK_1____")
+    # サービスとデータのセットアップ (JIS X 6319-4 属性準拠)
+    # 0x1021: Random R-only, Non-Auth
+    card.add_service(0x1021)
+    card.set_block(0x1021, 0, b"DATA_BLOCK_0____")
+    card.set_block(0x1021, 1, b"DATA_BLOCK_1____")
     
-    # 0x1009: Plain R/W
-    card.add_service(0x1009, "plain")
-    card.set_block(0x1009, 0, b"RW_BLOCK_0______")
+    # 0x1020: Random R/W, Non-Auth
+    card.add_service(0x1020)
+    card.set_block(0x1020, 0, b"RW_BLOCK_0______")
     
-    # 0x1008: Protected
-    card.add_service(0x1008, "protected")
+    # 0x1028: Random R/W, Auth Required
+    card.add_service(0x1028)
     
     return card
 
@@ -59,11 +59,11 @@ def test_polling_mismatch_sc(protocol):
 
 def test_request_service(protocol, sample_card):
     # Setup some versions
-    sample_card.add_service(0x100B, key_version=0x1234)
+    sample_card.add_service(0x1021, key_version=0x1234)
     
-    # Request Service for 0x100B (exists) and 0x9999 (not exists)
+    # Request Service for 0x1021 (exists) and 0x9999 (not exists)
     cmd = bytes([CommandCode.REQUEST_SERVICE, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 
-                 2, 0x0B, 0x10, 0x99, 0x99])
+                 2, 0x21, 0x10, 0x99, 0x99])
     
     protocol.current_idm = b"\x00" * 8
     
@@ -75,10 +75,10 @@ def test_request_service(protocol, sample_card):
 
 def test_read_without_encryption_success(protocol, sample_card):
     protocol.current_idm = sample_card.idm
-    # Read 1 service (0x100B), 1 block (No. 0)
+    # Read 1 service (0x1021), 1 block (No. 0)
     # [Code][IDm(8)][NumS(1)][SList(2)][NumB(1)][BList(2)]
     cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
-           bytes([1, 0x0B, 0x10, 1, 0x80, 0x00]))
+           bytes([1, 0x21, 0x10, 1, 0x80, 0x00]))
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE
@@ -88,9 +88,9 @@ def test_read_without_encryption_success(protocol, sample_card):
 
 def test_read_protected_service(protocol, sample_card):
     protocol.current_idm = sample_card.idm
-    # Read 0x1008 (protected)
+    # Read 0x1028 (auth required)
     cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
-           bytes([1, 0x08, 0x10, 1, 0x80, 0x00]))
+           bytes([1, 0x28, 0x10, 1, 0x80, 0x00]))
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE
@@ -100,14 +100,14 @@ def test_read_protected_service(protocol, sample_card):
 def test_write_without_encryption_success(protocol, sample_card):
     protocol.current_idm = sample_card.idm
     new_data = b"NEW_DATA_WRITTEN"
-    # Write to 0x1009 (R/W)
+    # Write to 0x1020 (R/W)
     cmd = (bytes([CommandCode.WRITE_WITHOUT_ENCRYPTION]) + sample_card.idm + 
-           bytes([1, 0x09, 0x10, 1, 0x80, 0x00]) + new_data)
+           bytes([1, 0x20, 0x10, 1, 0x80, 0x00]) + new_data)
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE
     assert res[10] == 0x00 # Success
-    assert sample_card.get_block(0x1009, 0) == new_data
+    assert sample_card.get_block(0x1020, 0) == new_data
 
 def test_search_service_code(protocol, sample_card):
     protocol.current_idm = sample_card.idm
@@ -153,15 +153,15 @@ def test_hook_interception(sample_card):
 
 def test_read_multiple_services_s_idx(protocol, sample_card):
     # Service 1 (s_idx=1) を追加
-    sample_card.add_service(0x200B, "plain")
-    sample_card.set_block(0x200B, 0, b"SVC_1_BLOCK_0___")
+    sample_card.add_service(0x2021, "plain")
+    sample_card.set_block(0x2021, 0, b"SVC_1_BLOCK_0___")
     protocol.current_idm = sample_card.idm
     
     # Read Service 1 (s_idx=1), Block 0 (2-byte format)
     # [Code][IDm(8)][NumS(2)][S1][S2][NumB(1)][BList(2)]
     # BList: \x88\x00 (s_idx=1, b_num=0)
     cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
-           bytes([2, 0x0B, 0x10, 0x0B, 0x20, 1, 0x88, 0x00]))
+           bytes([2, 0x21, 0x10, 0x21, 0x20, 1, 0x88, 0x00]))
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE
@@ -170,14 +170,14 @@ def test_read_multiple_services_s_idx(protocol, sample_card):
 
 def test_read_multiple_services_s_idx_3byte(protocol, sample_card):
     # Service 1 (s_idx=1) を追加
-    sample_card.add_service(0x200B, "plain")
-    sample_card.set_block(0x200B, 0, b"SVC_1_BLOCK_0___")
+    sample_card.add_service(0x2021, "plain")
+    sample_card.set_block(0x2021, 0, b"SVC_1_BLOCK_0___")
     protocol.current_idm = sample_card.idm
     
     # Read Service 1 (s_idx=1), Block 0 (3-byte format)
     # BList: \x08\x00\x00 (s_idx=1, b_num=0)
     cmd = (bytes([CommandCode.READ_WITHOUT_ENCRYPTION]) + sample_card.idm + 
-           bytes([2, 0x0B, 0x10, 0x0B, 0x20, 1, 0x08, 0x00, 0x00]))
+           bytes([2, 0x21, 0x10, 0x21, 0x20, 1, 0x08, 0x00, 0x00]))
     
     result, res = protocol.handle(cmd)
     assert result == ProtocolResult.RESPONSE

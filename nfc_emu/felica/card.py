@@ -123,6 +123,12 @@ class FeliCaCard(BaseCard):
 
     def add_service(self, code: int, attr: Optional[str] = None, max_blocks: Optional[int] = None, key_version: int = 0x0000):
         if code not in self.services:
+            # 属性が未指定の場合、サービスコードのビットから自動判別する
+            if attr is None:
+                from .const import ServiceAttribute
+                if ServiceAttribute.is_cyclic(code):
+                    attr = "cyclic"
+            
             self.services[code] = FeliCaService(code, attr, max_blocks, key_version)
         else:
             if attr is not None:

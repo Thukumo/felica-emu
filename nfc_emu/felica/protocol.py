@@ -265,8 +265,7 @@ class FeliCaProtocol(BaseProtocol):
             if s_idx >= len(services):
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.BLOCK_ERROR)
             svc = services[s_idx]
-            attr = self.card.get_service_attr(svc)
-            if attr in ("protected", "encrypted"):
+            if ServiceAttribute.is_auth_required(svc):
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.SECURITY_ERROR)
             if self.card.get_block(svc, b_num) is None:
                 return self._error_response(ResponseCode.READ_WITHOUT_ENCRYPTION_RES, StatusFlag2.BLOCK_ERROR)
@@ -333,9 +332,8 @@ class FeliCaProtocol(BaseProtocol):
             svc = services[s_idx]
             data = block_data_list[i]
             
-            # 属性チェック (読み取り専用サービスへの書き込み拒否)
-            # FeliCa仕様の下位4ビット属性 0x0B (RO-NonAuth), 0x0F (RO-Auth) をチェック
-            if (svc & 0x0F) in (0x0B, 0x0F):
+            # 属性チェック (JIS X 6319-4 に基づき、ReadOnly ビットをチェック)
+            if ServiceAttribute.is_read_only(svc):
                 return self._error_response(ResponseCode.WRITE_WITHOUT_ENCRYPTION_RES, StatusFlag2.SECURITY_ERROR)
             
             # --- Hook: on_write ---
