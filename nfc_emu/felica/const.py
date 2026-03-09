@@ -22,64 +22,42 @@ class ResponseCode(IntEnum):
     SEARCH_SERVICE_CODE_RES = 0x0B
     REQUEST_SYSTEM_CODE_RES = 0x0D
 
-class ServiceAttribute:
-    """FeliCa サービス属性の判定 (JIS X 6319-4 準拠)"""
-    
-    @staticmethod
-    def is_area(code: int) -> bool:
-        return (code & 0x30) == 0x00
-    
-    @staticmethod
-    def is_service(code: int) -> bool:
-        return (code & 0x30) == 0x20
-    
-    @staticmethod
-    def is_auth_required(code: int) -> bool:
-        return (code & 0x08) == 0x08
-        
-    @staticmethod
-    def is_cyclic(code: int) -> bool:
-        # Bit 2-1: 00=Random, 01=Cyclic, 10=Purse Direct, 11=Purse Cashback
-        return (code & 0x06) == 0x02
-        
-    @staticmethod
-    def is_read_only(code: int) -> bool:
-        return (code & 0x01) == 0x01
+class ServiceAttribute(IntEnum):
+    AREA = 0x00
+    # bit0=0, attr≠0x00: Protected
+    # bit0=1, bit2=0: Plain
+    # bit0=1, bit2=1: Encrypted
+    # bit1: 0=Non-cyclic, 1=Cyclic
+    # bit4,5: 10=Read/Write, 11=Read Only
 
     @classmethod
     def from_code(cls, code: int) -> str:
         attr = code & 0x3F
+        if attr == 0x00:
+            return "area"
         
-        # Area 判定
-        if cls.is_area(code):
-            return "area" if not cls.is_auth_required(code) else "area-auth"
-            
-        if not cls.is_service(code):
-            return f"unknown(0x{attr:02X})"
-            
-        # Service の性質判定
-        parts = []
-        if cls.is_auth_required(code):
-            parts.append("auth")
+        # 認証が必要な場合 (bit0=0)
+        if not (attr & 0x01):
+            res = "protected"
+            # bit2 は Protected の場合 Encryption を指すことが多い
+            if attr & 0x04:
+                res = "encrypted"
         else:
-            parts.append("plain")
+            res = "plain"
             
-        # サービス区分 (Bit 2-1)
-        sub_type = (attr & 0x06) >> 1
-        if sub_type == 0x01:
-            parts.append("cyclic")
-        elif sub_type >= 0x02:
-            parts.append("purse")
-        else:
-            parts.append("random")
+        # サービスビット (bit3) が立っている場合のみ詳細を表示
+        if attr & 0x08:
+            # R/O か R/W か (bit 2)
+            if attr & 0x04:
+                res += " (R/O)"
+            else:
+                res += " (R/W)"
+                
+            # サイクリックかどうか (bit 1)
+            if attr & 0x02:
+                res += " [C]"
             
-        # 読み書き権限 (Bit 0)
-        if cls.is_read_only(code):
-            parts.append("ro")
-        else:
-            parts.append("rw")
-            
-        return "-".join(parts)
+        return res
 
 class ErrorCode(IntEnum):
     SUCCESS = 0x00
