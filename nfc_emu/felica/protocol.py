@@ -115,9 +115,12 @@ class FeliCaProtocol(BaseProtocol):
             return ProtocolResult.UNKNOWN, None
 
         # IDm チェック (Polling 以外)
-        if code != CommandCode.POLLING and len(cmd) >= 9 and cmd[OFFSET_IDM:OFFSET_IDM+8] != self.current_idm:
-            # 別の IDm 宛てのコマンドは無視（セッション継続）
-            return ProtocolResult.CONTINUE, b""
+        if code != CommandCode.POLLING and len(cmd) >= 9:
+            target_idm = cmd[OFFSET_IDM:OFFSET_IDM+8]
+            # 最後に Polling した IDm か、またはカードが持ついずれかの IDm と一致するか確認
+            if target_idm != self.current_idm and target_idm not in self.card.all_idms:
+                # 別の IDm 宛てのコマンドは無視
+                return ProtocolResult.CONTINUE, b""
 
         res = handler(cmd)
         if res is None:

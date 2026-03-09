@@ -92,6 +92,10 @@ class FeliCaCard(BaseCard):
         return self.sys_map[struct.unpack(">H", self.primary_sys_code)[0]]["pmm"]
 
     @property
+    def all_idms(self) -> List[bytes]:
+        return [info["idm"] for info in self.sys_map.values()]
+
+    @property
     def sys_codes(self) -> List[bytes]:
         return [struct.pack(">H", sc) for sc in self.sys_map.keys()]
 
